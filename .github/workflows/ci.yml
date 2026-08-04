@@ -22,6 +22,7 @@ jobs:
           cache: maven
 
       - name: Build & run tests
+        working-directory: books-api
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET_CI }}
         run: mvn verify -q
@@ -31,7 +32,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: target/surefire-reports/
+          path: books-api/target/surefire-reports/
 
   sast:
     name: SAST — SpotBugs + FindSecBugs
@@ -49,6 +50,7 @@ jobs:
           cache: maven
 
       - name: Run SpotBugs
+        working-directory: books-api
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET_CI }}
         run: mvn spotbugs:check -q
@@ -58,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: spotbugs-report
-          path: target/spotbugsXml.xml
+          path: books-api/target/spotbugsXml.xml
 
   sca:
     name: SCA — OWASP Dependency Check
@@ -109,6 +111,7 @@ jobs:
           distribution: temurin
 
       - name: Build for CodeQL
+        working-directory: books-api
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET_CI }}
         run: mvn compile -q
@@ -125,4 +128,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t books-api:${{ github.sha }} .
+        run: docker build -t books-api:${{ github.sha }} ./books-api
