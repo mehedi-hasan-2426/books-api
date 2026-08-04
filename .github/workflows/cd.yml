@@ -63,7 +63,7 @@ jobs:
             # Login to ECR and pull the new image
             aws ecr get-login-password --region ${{ env.AWS_REGION }} \
               | docker login --username AWS \
-                --password-stdin ${{ steps.build-image.outputs.image }}
+                --password-stdin ${{ steps.login-ecr.outputs.registry }}
 
             docker pull ${{ steps.build-image.outputs.image }}
 
@@ -80,6 +80,6 @@ jobs:
               -e SPRING_PROFILES_ACTIVE=prod \
               ${{ steps.build-image.outputs.image }}
 
-            # Verify health
-            sleep 10
+            # Verify health — Spring Boot + RDS cold start needs ~60s
+            sleep 60
             curl -sf http://localhost:8080/api-docs || (docker logs books-api && exit 1)
