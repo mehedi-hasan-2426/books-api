@@ -2,12 +2,11 @@
 FROM eclipse-temurin:17-jdk-alpine AS build
 WORKDIR /app
 
-# Copy Maven wrapper and pom first for layer caching
-COPY pom.xml .
-COPY .mvn .mvn
+RUN apk add --no-cache maven
 
-# Download dependencies (cached unless pom.xml changes)
-RUN ./mvnw dependency:go-offline -q 2>/dev/null || mvn dependency:go-offline -q || true
+# Copy pom first so dependency layer is cached separately from source
+COPY pom.xml .
+RUN mvn dependency:go-offline -q || true
 
 COPY src ./src
 RUN mvn package -DskipTests -q

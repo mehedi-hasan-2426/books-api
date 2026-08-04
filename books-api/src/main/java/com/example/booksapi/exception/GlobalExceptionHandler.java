@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -53,8 +54,8 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "/problems/validation-error", "Validation Error", detail, req);
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiProblem> handleAccessDenied(AccessDeniedException ex, HttpServletRequest req) {
+    @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
+    public ResponseEntity<ApiProblem> handleAccessDenied(RuntimeException ex, HttpServletRequest req) {
         return problem(HttpStatus.FORBIDDEN, "/problems/forbidden", "Forbidden",
                 "You do not have permission to perform this action", req);
     }
