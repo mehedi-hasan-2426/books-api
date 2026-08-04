@@ -1,6 +1,11 @@
 output "alb_dns_name" {
-  description = "Load balancer DNS — use this as your API base URL"
+  description = "Load balancer DNS — HTTP"
   value       = "http://${aws_lb.app.dns_name}"
+}
+
+output "alb_https_url" {
+  description = "Load balancer HTTPS URL (self-signed cert — accept in browser first)"
+  value       = "https://${aws_lb.app.dns_name}"
 }
 
 output "ec2_public_ip" {
