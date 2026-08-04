@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const [form, setForm] = useState({ username: '', password: '' })
   const [err, setErr] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -42,14 +43,19 @@ export default function RegisterPage() {
           onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
           required
         />
-        <input
-          type="password"
-          placeholder="Password (min 8 chars)"
-          autoComplete="new-password"
-          value={form.password}
-          onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-          required
-        />
+        <div className="password-wrapper">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Password (min 8 chars)"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+            required
+          />
+          <button type="button" className="show-password" onClick={() => setShowPassword(v => !v)} aria-label="Toggle password visibility">
+            {showPassword ? '🙈' : '👁️'}
+          </button>
+        </div>
         <button type="submit" disabled={loading}>
           {loading ? 'Creating…' : 'Create account'}
         </button>
