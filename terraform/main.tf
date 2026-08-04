@@ -68,7 +68,7 @@ resource "aws_security_group" "app" {
     security_groups = [aws_security_group.alb.id]
   }
   ingress {
-    description = "SSH — replace with your IP"
+    description = "SSH - replace with your IP"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
