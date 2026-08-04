@@ -1,0 +1,286 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-08-04",
+  "__export_source": "books-api",
+  "resources": [
+    {
+      "_type": "workspace",
+      "_id": "wrk_books_api",
+      "name": "Books API — Zalando",
+      "description": "Spring Boot Books API following Zalando RESTful Guidelines"
+    },
+    {
+      "_type": "environment",
+      "_id": "env_books_api",
+      "parentId": "wrk_books_api",
+      "name": "Local Dev",
+      "data": {
+        "base_url": "http://localhost:8080",
+        "access_token": "",
+        "refresh_token": ""
+      }
+    },
+    {
+      "_type": "request_group",
+      "_id": "fld_auth",
+      "parentId": "wrk_books_api",
+      "name": "Auth"
+    },
+    {
+      "_type": "request",
+      "_id": "req_register",
+      "parentId": "fld_auth",
+      "name": "Register",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/register",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"alice\",\n  \"password\": \"Str0ngP@ssword!\"\n}"
+      },
+      "description": "Creates a new USER-role account. Returns 201 on success."
+    },
+    {
+      "_type": "request",
+      "_id": "req_login",
+      "parentId": "fld_auth",
+      "name": "Login",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/login",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"alice\",\n  \"password\": \"Str0ngP@ssword!\"\n}"
+      },
+      "description": "Returns access_token (30 min) + refresh_token (7 days). Copy access_token into the env variable."
+    },
+    {
+      "_type": "request",
+      "_id": "req_refresh",
+      "parentId": "fld_auth",
+      "name": "Refresh Token",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/refresh",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"refresh_token\": \"{{ _.refresh_token }}\"\n}"
+      },
+      "description": "Exchange refresh_token for new access_token. Old refresh token is invalidated (rotation)."
+    },
+    {
+      "_type": "request_group",
+      "_id": "fld_books",
+      "parentId": "wrk_books_api",
+      "name": "Books"
+    },
+    {
+      "_type": "request",
+      "_id": "req_list_books",
+      "parentId": "fld_books",
+      "name": "List Books (paginated)",
+      "method": "GET",
+      "url": "{{ _.base_url }}/books?limit=10",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" }
+      ],
+      "description": "Returns {\"items\":[...],\"next\":\"cursor\"}. Use ?cursor=<next> for next page. Also try ?q=search+term."
+    },
+    {
+      "_type": "request",
+      "_id": "req_list_books_cursor",
+      "parentId": "fld_books",
+      "name": "List Books (next page)",
+      "method": "GET",
+      "url": "{{ _.base_url }}/books?limit=5&cursor=REPLACE_WITH_CURSOR_FROM_PREVIOUS_RESPONSE",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" }
+      ],
+      "description": "Replace cursor value with the 'next' field from the previous response."
+    },
+    {
+      "_type": "request",
+      "_id": "req_get_book",
+      "parentId": "fld_books",
+      "name": "Get Book by ID",
+      "method": "GET",
+      "url": "{{ _.base_url }}/books/1",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" }
+      ],
+      "description": "Returns single book. Check ETag header in response — needed for PATCH."
+    },
+    {
+      "_type": "request",
+      "_id": "req_create_book",
+      "parentId": "fld_books",
+      "name": "Create Book (USER or ADMIN)",
+      "method": "POST",
+      "url": "{{ _.base_url }}/books",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"Clean Code\",\n  \"author\": \"Robert C. Martin\",\n  \"genre\": \"Software Engineering\"\n}"
+      },
+      "description": "Returns 201 with Location header pointing to the new resource."
+    },
+    {
+      "_type": "request",
+      "_id": "req_patch_book",
+      "parentId": "fld_books",
+      "name": "Patch Book (requires If-Match ETag)",
+      "method": "PATCH",
+      "url": "{{ _.base_url }}/books/1",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" },
+        { "name": "Content-Type", "value": "application/merge-patch+json" },
+        { "name": "If-Match", "value": "\"REPLACE_WITH_ETAG_FROM_GET\"" }
+      ],
+      "body": {
+        "mimeType": "application/merge-patch+json",
+        "text": "{\n  \"genre\": \"Programming\"\n}"
+      },
+      "description": "JSON Merge Patch (RFC 7396). Omit If-Match to trigger 428. Send wrong ETag to trigger 412."
+    },
+    {
+      "_type": "request",
+      "_id": "req_delete_book",
+      "parentId": "fld_books",
+      "name": "Delete Book (ADMIN only)",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/books/1",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" }
+      ],
+      "description": "Requires ADMIN role. USER role gets 403 Forbidden with Problem JSON."
+    },
+    {
+      "_type": "request_group",
+      "_id": "fld_errors",
+      "parentId": "wrk_books_api",
+      "name": "Error Cases (Problem JSON)"
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_404",
+      "parentId": "fld_errors",
+      "name": "404 — Book Not Found",
+      "method": "GET",
+      "url": "{{ _.base_url }}/books/999999",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" }
+      ],
+      "description": "Expect: {\"type\":\"/problems/book-not-found\",\"status\":404,...}"
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_401",
+      "parentId": "fld_errors",
+      "name": "401 — No Token",
+      "method": "GET",
+      "url": "{{ _.base_url }}/books",
+      "headers": [],
+      "description": "Expect: {\"type\":\"/problems/unauthorized\",\"status\":401,...}"
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_403",
+      "parentId": "fld_errors",
+      "name": "403 — Forbidden (USER trying DELETE)",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/books/1",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" }
+      ],
+      "description": "Login as a USER-role account. DELETE requires ADMIN. Expect 403 Problem JSON."
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_428",
+      "parentId": "fld_errors",
+      "name": "428 — Missing If-Match",
+      "method": "PATCH",
+      "url": "{{ _.base_url }}/books/1",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" },
+        { "name": "Content-Type", "value": "application/merge-patch+json" }
+      ],
+      "body": {
+        "mimeType": "application/merge-patch+json",
+        "text": "{\"genre\": \"Fiction\"}"
+      },
+      "description": "No If-Match header → 428 Precondition Required."
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_412",
+      "parentId": "fld_errors",
+      "name": "412 — Stale ETag",
+      "method": "PATCH",
+      "url": "{{ _.base_url }}/books/1",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" },
+        { "name": "Content-Type", "value": "application/merge-patch+json" },
+        { "name": "If-Match", "value": "\"1-000000\"" }
+      ],
+      "body": {
+        "mimeType": "application/merge-patch+json",
+        "text": "{\"genre\": \"Fiction\"}"
+      },
+      "description": "Wrong ETag → 412 Precondition Failed (optimistic locking)."
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_validation",
+      "parentId": "fld_errors",
+      "name": "400 — Validation Error",
+      "method": "POST",
+      "url": "{{ _.base_url }}/books",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.access_token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"\",\n  \"author\": \"\"\n}"
+      },
+      "description": "Empty required fields → 400 with validation details."
+    },
+    {
+      "_type": "request",
+      "_id": "req_err_429",
+      "parentId": "fld_errors",
+      "name": "429 — Rate Limit (send login 6x fast)",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/login",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"alice\",\n  \"password\": \"wrong\"\n}"
+      },
+      "description": "Send this 6 times quickly. 6th attempt → 429 with Retry-After and X-RateLimit-* headers."
+    },
+    {
+      "_type": "request",
+      "_id": "req_openapi",
+      "parentId": "wrk_books_api",
+      "name": "OpenAPI Spec",
+      "method": "GET",
+      "url": "{{ _.base_url }}/api-docs",
+      "description": "Full OpenAPI 3 JSON spec — no auth required."
+    },
+    {
+      "_type": "request",
+      "_id": "req_swagger",
+      "parentId": "wrk_books_api",
+      "name": "Swagger UI",
+      "method": "GET",
+      "url": "{{ _.base_url }}/swagger-ui.html",
+      "description": "Interactive Swagger UI — open in browser."
+    }
+  ]
+}

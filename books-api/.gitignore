@@ -1,0 +1,42 @@
+# Compiled / build output
+target/
+*.class
+*.jar
+*.war
+
+# Maven wrapper cache (contains machine-specific absolute paths)
+.mvn/jvm.config
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Environment files — NEVER commit real secrets
+.env
+.env.local
+.env.prod
+*.env
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Terraform state (contains secrets and machine-specific data)
+terraform/
+!terraform/*.tf
+!terraform/*.tfvars.example
+terraform/*.tfvars
+terraform/terraform.tfstate
+terraform/terraform.tfstate*
+terraform/.terraform/
+terraform/.terraform.lock.hcl

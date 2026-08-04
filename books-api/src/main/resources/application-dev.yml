@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:booksdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+server:
+  port: 8080
+
+# Dev-only JWT secret — never use in production
+app:
+  jwt:
+    secret: dGhpcyBpcyBhIGRldi1vbmx5IHNlY3JldC1kb250LXVzZS1pbi1wcm9kdWN0aW9u

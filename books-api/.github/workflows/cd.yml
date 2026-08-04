@@ -1,0 +1,86 @@
+name: CD — Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: books-api
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag and push Docker image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Also tag as latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                     $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            # Pull latest secrets from SSM Parameter Store
+            export JWT_SECRET=$(aws ssm get-parameter \
+              --name /books-api/jwt-secret --with-decryption \
+              --query Parameter.Value --output text)
+            export DATABASE_PASSWORD=$(aws ssm get-parameter \
+              --name /books-api/db-password --with-decryption \
+              --query Parameter.Value --output text)
+            export DATABASE_URL=$(aws ssm get-parameter \
+              --name /books-api/database-url \
+              --query Parameter.Value --output text)
+
+            # Login to ECR and pull the new image
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+              | docker login --username AWS \
+                --password-stdin ${{ steps.build-image.outputs.image }}
+
+            docker pull ${{ steps.build-image.outputs.image }}
+
+            # Rolling restart with zero-downtime swap
+            docker stop books-api 2>/dev/null || true
+            docker rm books-api 2>/dev/null || true
+            docker run -d --name books-api \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              -e JWT_SECRET="$JWT_SECRET" \
+              -e DATABASE_URL="$DATABASE_URL" \
+              -e DATABASE_USERNAME=books_user \
+              -e DATABASE_PASSWORD="$DATABASE_PASSWORD" \
+              -e SPRING_PROFILES_ACTIVE=prod \
+              ${{ steps.build-image.outputs.image }}
+
+            # Verify health
+            sleep 10
+            curl -sf http://localhost:8080/api-docs || (docker logs books-api && exit 1)
