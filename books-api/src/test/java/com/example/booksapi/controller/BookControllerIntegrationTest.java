@@ -1,6 +1,7 @@
 package com.example.booksapi.controller;
 
 import com.example.booksapi.model.Book;
+import com.example.booksapi.model.Role;
 import com.example.booksapi.model.User;
 import com.example.booksapi.repository.BookRepository;
 import com.example.booksapi.repository.RefreshTokenRepository;
@@ -45,6 +46,7 @@ class BookControllerIntegrationTest {
         User user = userRepository.save(User.builder()
                 .username("testuser")
                 .passwordHash(passwordEncoder.encode("password123"))
+                .role(Role.ADMIN)
                 .createdAt(Instant.now())
                 .build());
         authHeader = "Bearer " + jwtService.generateToken(user.getUsername());
