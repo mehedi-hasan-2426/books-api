@@ -23,4 +23,4 @@ app:
     expiration-ms: 1800000        # 30 minutes
     refresh-expiration-ms: 604800000  # 7 days
   cors:
-    allowed-origins: "http://localhost:3000,http://localhost:8080"
+    allowed-origins: "http://localhost:3000,http://localhost:8080,https://mehedi-hasan-2426.github.io,https://mehedi-hasan-2426.github.io"
