@@ -1,0 +1,35 @@
+# Java build output
+books-api/target/
+*.class
+*.jar
+*.war
+
+# Maven wrapper
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Terraform state (sensitive — never commit)
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
