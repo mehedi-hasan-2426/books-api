@@ -9,6 +9,10 @@ env:
   ECR_REPOSITORY: books-api
   EC2_HOST: ${{ secrets.EC2_HOST }}
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   deploy:
     name: Build, Push & Deploy
@@ -16,18 +20,20 @@ jobs:
     environment: production
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: books-api-deploy-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd
 
       - name: Build, tag and push Docker image to ECR
         id: build-image
@@ -43,13 +49,12 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            # Pull latest secrets from SSM Parameter Store
             export JWT_SECRET=$(aws ssm get-parameter \
               --name /books-api/jwt-secret --with-decryption \
               --query Parameter.Value --output text)
@@ -60,14 +65,12 @@ jobs:
               --name /books-api/database-url \
               --query Parameter.Value --output text)
 
-            # Login to ECR and pull the new image
             aws ecr get-login-password --region ${{ env.AWS_REGION }} \
               | docker login --username AWS \
                 --password-stdin ${{ steps.login-ecr.outputs.registry }}
 
             docker pull ${{ steps.build-image.outputs.image }}
 
-            # Rolling restart with zero-downtime swap
             docker stop books-api 2>/dev/null || true
             docker rm books-api 2>/dev/null || true
             docker run -d --name books-api \
@@ -80,6 +83,5 @@ jobs:
               -e SPRING_PROFILES_ACTIVE=prod \
               ${{ steps.build-image.outputs.image }}
 
-            # Verify health — Spring Boot + RDS cold start needs ~60s
             sleep 60
             curl -sf http://localhost:8080/api-docs || (docker logs books-api && exit 1)
