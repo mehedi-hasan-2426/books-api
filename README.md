@@ -320,10 +320,16 @@ Workflow files: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | [`.gith
 | Secret | Description |
 |---|---|
 | `JWT_SECRET_CI` | Test JWT secret (any 32+ byte base64 string) |
-| `AWS_ACCESS_KEY_ID` | AWS IAM access key for CD deployments |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key for CD deployments |
 | `EC2_HOST` | Public address of the EC2 instance |
 | `EC2_SSH_PRIVATE_KEY` | SSH key the CD workflow uses to log in to the instance |
+
+CD authenticates to AWS with GitHub OIDC, so no AWS access keys are stored in GitHub. The `production` environment needs one variable:
+
+| Variable | Description |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | ARN from the `github_deploy_role_arn` Terraform output |
+
+The deploy role trusts only tokens for this repository's `production` environment and can only push images to the `books-api` ECR repository.
 
 ---
 
@@ -338,6 +344,7 @@ The `terraform/` directory provisions the full AWS stack:
 | Application Load Balancer | HTTPS termination with a self-signed certificate, health checks |
 | Security Groups | ALB → EC2 → RDS port isolation |
 | SSM Parameter Store | Secrets (DB password, JWT secret), kept out of the code |
+| IAM OIDC provider + deploy role | Lets GitHub Actions push to ECR without stored AWS keys |
 
 **Deploy:**
 
@@ -355,6 +362,12 @@ terraform apply -var="app_name=books-api" -var="aws_region=eu-west-1"
 
 > No remote backend is configured, so Terraform keeps its state in a local file. Never commit state or plan files: they can contain secrets such as the JWT secret.
 
+**Connect GitHub Actions to AWS (once):**
+
+1. If your AWS account already has a GitHub OIDC provider, add `-var="create_github_oidc_provider=false"` to `plan` and `apply`.
+2. After `terraform apply`, read the role ARN with `terraform output github_deploy_role_arn`.
+3. Store it on the `production` environment: `gh variable set AWS_DEPLOY_ROLE_ARN --env production --body "<role ARN>"`.
+
 **Destroy when done (avoids AWS charges):**
 
 ```bash
@@ -368,7 +381,7 @@ terraform destroy
 - **Rate limiting is in memory.** Each instance keeps its own Bucket4j buckets, so limits are not shared if more than one instance runs. A shared store such as Redis would be needed for that.
 - **Not highly available.** There is one EC2 instance, and RDS runs in a single availability zone (`multi_az = false`). If either fails, the API is down.
 - **Deployments cause downtime.** The CD workflow stops the old container before starting the new one.
-- **Long-lived AWS keys.** CD authenticates with an IAM access key stored in GitHub Secrets. Moving to GitHub OIDC with a short-lived role is planned.
+- **SSH-based deploys.** CD still logs in to the instance with an SSH key stored in GitHub Secrets. AWS Systems Manager Run Command would remove the need for open SSH and a stored key.
 - **SSH is open by default.** `ssh_allowed_cidr` defaults to `0.0.0.0/0`. Set it to your own IP before applying.
 - **Self-signed certificate.** Browsers will warn about the HTTPS listener. A real deployment would use a domain and an ACM-issued certificate.
 - **Local Terraform state.** There is no S3 backend or state locking yet.
