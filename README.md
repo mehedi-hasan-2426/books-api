@@ -1,8 +1,8 @@
 # Books API
 
-> A production-grade REST API built with **Spring Boot 3.3** and **Java 17**, strictly following the [Zalando RESTful API Guidelines](https://opensource.zalando.com/restful-api-guidelines/).
+> A REST API built with **Spring Boot 3.3** and **Java 17**, following the [Zalando RESTful API Guidelines](https://opensource.zalando.com/restful-api-guidelines/).
 
-Built as a learning project to demonstrate real-world API design, security hardening, CI/CD, and cloud infrastructure — every concept maps directly to industry practices.
+This is a learning project. I built it to practise API design, security hardening, CI/CD, and deploying to AWS with Terraform. It is not running in production, and the [Known Limitations](#known-limitations) section lists what would need to change before it could.
 
 ---
 
@@ -22,6 +22,7 @@ Built as a learning project to demonstrate real-world API design, security harde
   - [DAST — OWASP ZAP](#dast--owasp-zap)
 - [CI/CD Pipeline](#cicd-pipeline)
 - [Infrastructure (Terraform)](#infrastructure-terraform)
+- [Known Limitations](#known-limitations)
 - [Testing with Insomnia](#testing-with-insomnia)
 - [License](#license)
 
@@ -46,7 +47,7 @@ Security concepts demonstrated in this project:
 **API Security**
 - Cursor-based pagination — opaque Base64 tokens, never exposes internal IDs
 - ETag + `If-Match` optimistic locking on PATCH
-- Rate limiting — 5 req/min on login, 30 req/min on list (Bucket4j)
+- Rate limiting: 5 req/min on login, 30 req/min on list (Bucket4j, held in memory per instance)
 - `X-Flow-ID` propagated through all requests for distributed tracing
 
 **Java Process Security**
@@ -59,12 +60,12 @@ Security concepts demonstrated in this project:
 **Security Testing**
 - SAST: SpotBugs + FindSecBugs (bytecode analysis)
 - SCA: OWASP Dependency-Check (known CVE scanning on all dependencies)
-- DAST: OWASP ZAP API scan against the live OpenAPI spec
+- DAST: OWASP ZAP API scan against the live OpenAPI spec (run manually, not part of CI)
 
-**Symmetric & Asymmetric Concepts**
-- JWT signed with HMAC-SHA256 (symmetric — shared secret)
-- BCrypt (one-way hashing for passwords)
-- Refresh tokens — UUID stored as opaque tokens, rotated on use
+**Cryptography**
+- JWTs are signed with HMAC-SHA256, which uses one shared secret for signing and verifying
+- Passwords are hashed with BCrypt
+- Refresh tokens are random UUIDs stored server-side and replaced on every use
 
 ---
 
@@ -119,8 +120,10 @@ Pass `?cursor=MTI=` to get the next page. `next` is `null` when there are no mor
 
 ## Project Structure
 
+The Spring Boot application lives in `books-api/`, a small React frontend in `frontend/`, and the AWS stack in `terraform/`.
+
 ```
-src/main/java/com/example/booksapi/
+books-api/src/main/java/com/example/booksapi/
 ├── controller/          BookController, AuthController
 ├── service/             BookService, AuthService, SecurityAuditService
 ├── repository/          BookRepository, UserRepository, RefreshTokenRepository
@@ -134,7 +137,7 @@ src/main/java/com/example/booksapi/
 └── config/              CorsConfig, RateLimitConfig, RateLimitInterceptor,
                          JacksonSecurityConfig, OpenApiConfig, WebMvcConfig
 
-src/test/java/com/example/booksapi/
+books-api/src/test/java/com/example/booksapi/
 ├── controller/          AuthControllerIntegrationTest, BookControllerIntegrationTest
 └── service/             BookServiceTest
 ```
@@ -182,7 +185,7 @@ The `dev` Spring profile uses H2 in-memory — no database setup needed.
 
 ```bash
 git clone https://github.com/mehedi-hasan-2426/books-api.git
-cd books-api
+cd books-api/books-api
 ```
 
 **2. Set the required environment variable**
@@ -308,19 +311,19 @@ push / PR
             └── Upload HTML report
 ```
 
-On merge to `main`, the CD workflow builds the Docker image, pushes it to ECR, and triggers a rolling deployment to EC2 via AWS Systems Manager.
+On merge to `main`, the CD workflow builds the Docker image, pushes it to ECR, and deploys it to the EC2 instance over SSH. The old container is stopped before the new one starts, so each deployment causes a short outage.
 
 Workflow files: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | [`.github/workflows/cd.yml`](.github/workflows/cd.yml)
 
-**GitHub Secrets required for CI:**
+**GitHub Secrets used by the workflows:**
 
 | Secret | Description |
 |---|---|
 | `JWT_SECRET_CI` | Test JWT secret (any 32+ byte base64 string) |
-| `AWS_ACCESS_KEY_ID` | AWS IAM key for CD deployments |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret for CD deployments |
-| `ECR_REPOSITORY` | ECR repository URI |
-| `EC2_INSTANCE_ID` | Target EC2 instance ID |
+| `AWS_ACCESS_KEY_ID` | AWS IAM access key for CD deployments |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key for CD deployments |
+| `EC2_HOST` | Public address of the EC2 instance |
+| `EC2_SSH_PRIVATE_KEY` | SSH key the CD workflow uses to log in to the instance |
 
 ---
 
@@ -332,17 +335,15 @@ The `terraform/` directory provisions the full AWS stack:
 |---|---|
 | EC2 (t3.micro) | Application server |
 | RDS PostgreSQL (db.t3.micro) | Production database |
-| Application Load Balancer | HTTPS termination, health checks |
+| Application Load Balancer | HTTPS termination with a self-signed certificate, health checks |
 | Security Groups | ALB → EC2 → RDS port isolation |
-| SSM Parameter Store | Secrets (DB password, JWT secret) — never in code |
-| S3 | Terraform remote state |
+| SSM Parameter Store | Secrets (DB password, JWT secret), kept out of the code |
 
 **Deploy:**
 
 ```bash
 cd terraform/
 
-# First time only — create S3 state bucket and DynamoDB lock table
 terraform init
 
 # Preview changes
@@ -352,7 +353,7 @@ terraform plan -var="app_name=books-api" -var="aws_region=eu-west-1"
 terraform apply -var="app_name=books-api" -var="aws_region=eu-west-1"
 ```
 
-> Terraform state is stored remotely in S3 with DynamoDB locking — safe for team use.
+> No remote backend is configured, so Terraform keeps its state in a local file. Never commit state or plan files: they can contain secrets such as the JWT secret.
 
 **Destroy when done (avoids AWS charges):**
 
@@ -362,9 +363,21 @@ terraform destroy
 
 ---
 
+## Known Limitations
+
+- **Rate limiting is in memory.** Each instance keeps its own Bucket4j buckets, so limits are not shared if more than one instance runs. A shared store such as Redis would be needed for that.
+- **Not highly available.** There is one EC2 instance, and RDS runs in a single availability zone (`multi_az = false`). If either fails, the API is down.
+- **Deployments cause downtime.** The CD workflow stops the old container before starting the new one.
+- **Long-lived AWS keys.** CD authenticates with an IAM access key stored in GitHub Secrets. Moving to GitHub OIDC with a short-lived role is planned.
+- **SSH is open by default.** `ssh_allowed_cidr` defaults to `0.0.0.0/0`. Set it to your own IP before applying.
+- **Self-signed certificate.** Browsers will warn about the HTTPS listener. A real deployment would use a domain and an ACM-issued certificate.
+- **Local Terraform state.** There is no S3 backend or state locking yet.
+
+---
+
 ## Testing with Insomnia
 
-Import [`insomnia-collection.json`](../insomnia-collection.json) into Insomnia to get a pre-built collection covering every endpoint.
+There is no saved Insomnia collection in this repo. Start the app, then import the OpenAPI spec from `http://localhost:8080/api-docs` into Insomnia to generate requests for every endpoint.
 
 **Typical flow:**
 
